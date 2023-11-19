@@ -1,0 +1,12 @@
+certifi==2023.7.22
+charset-normalizer==3.2.0
+idna==3.4
+psycopg2-binary==2.9.7
+pycparser==2.21
+requests==2.31.0
+soupsieve==2.4.1
+urllib3==2.0.4
+
+Extracting data from the lamoda-online-shop (https://www.lamoda.ru/)
+Inserting the extracted data into the database (PostgreSQL)
+to be continued...
