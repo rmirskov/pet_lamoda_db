@@ -6,7 +6,3 @@ pycparser==2.21
 requests==2.31.0
 soupsieve==2.4.1
 urllib3==2.0.4
-
-Extracting data from the lamoda-online-shop (https://www.lamoda.ru/)
-Inserting the extracted data into the database (PostgreSQL)
-to be continued...
