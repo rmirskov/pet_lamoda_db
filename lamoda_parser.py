@@ -40,17 +40,17 @@ def get_random_proxy(proxies: list[str]) -> dict[str, str]:
         }
 
 
-def count_rows(pg_cursor, db_table: str) -> int:
+def count_rows(cursor, db_table: str) -> int:
     query = f"SELECT COUNT(*) FROM {db_table};"
-    pg_cursor.execute(query)
-    result = pg_cursor.fetchone()
+    cursor.execute(query)
+    result = cursor.fetchone()
     return result[0]
 
 
-def get_key(pg_cursor, db_table: str, key: str, column: str, value: str) -> int:
+def get_key(cursor, db_table: str, key: str, column: str, value: str) -> int:
     query = f"SELECT {key} FROM {db_table} WHERE {column} = \'{value}\';"
-    pg_cursor.execute(query)
-    result = pg_cursor.fetchone()
+    cursor.execute(query)
+    result = cursor.fetchone()
     if result:
         return result[0]
     return result
@@ -64,15 +64,80 @@ def inserting_data(connection, cursor, query: str, tpl: tuple) -> None:
     connection.commit()
 
 
-def get_items_data(articles: list[str], proxies: list[str], user_agents: list[str], pg_connection, pg_cursor) -> None:
-    for i in range(len(articles)):
-        time.sleep(1.0 + random.random())
-        cur_get_link = f'{API_LINK}get?sku={articles[i]}'
-        # cur_reviews_link = f'{API_LINK}reviews?sku={articles[i]}'
-        # cur_questions_link = f'{API_LINK}questions?sku={articles[i]}'
+def get_product_reviews(product_id: str, proxies: list[str], user_agents: list[str], connection, cursor) -> None:
+    '''EXTRACT AND INSERT DATA INTO TABLE reviews'''
+    reviews_link = f'{API_LINK}reviews'
+    cur_offset = 0
+    while True:
+        parameters = {
+            'limit': 50, 'offset': cur_offset,'only_with_photos': False,
+            'sku': product_id, 'sort': 'date', 'sort_direction': 'desc'
+            }
         headers = get_random_headers(user_agents)
         proxy = get_random_proxy(proxies)
-        cur_r = requests.get(cur_get_link, headers=headers, proxies=proxy)
+        cur_r = requests.get(reviews_link, params=parameters, headers=headers, proxies=proxy)
+        if cur_r.status_code == 200:
+            cur_data = json.loads(cur_r.text)
+            reviews = cur_data['reviews']
+            if len(reviews) == 0:
+                break
+            for review in reviews:
+                review_id = count_rows(cursor, 'reviews') + 1
+                uuid = review['uuid']
+                text = review['text']
+                if 'size' in review['fittings']:
+                    fittings = review['fittings']['size']['title']
+                else:
+                    fittings = None
+                created_time = review['created_time']
+                rating = review['rating']
+                review_query = "INSERT INTO reviews (review_id, product_id, uuid, text, fittings, created_time, rating)\
+                    VALUES (%s, %s, %s, %s, %s, %s, %s);"
+                review_tuple = (review_id, product_id, uuid, text, fittings, created_time, rating)
+                inserting_data(connection, cursor, review_query, review_tuple)
+            cur_offset += parameters['limit']
+        else:
+            print('products reviews request >> status_code is not equal 200')
+            break
+
+
+def get_products_questions(product_id: str, proxies: list[str], user_agents: list[str], connection, cursor) -> None:
+    '''EXTRACT AND INSERT DATA INTO TABLE questions'''
+    questions_link = f'{API_LINK}questions'
+    cur_offset = 0
+    while True:
+        parameters = {'limit': 10, 'offset': cur_offset, 'sku': product_id}
+        headers = get_random_headers(user_agents)
+        proxy = get_random_proxy(proxies)
+        cur_r = requests.get(questions_link, params=parameters, headers=headers, proxies=proxy)
+        if cur_r.status_code == 200:
+            cur_data = json.loads(cur_r.text)
+            questions = cur_data['questions']
+            if len(questions) == 0:
+                break
+            for question in questions:
+                question_id = count_rows(cursor, 'questions') + 1
+                username = question['username']
+                text = question['text']
+                created_time = question['created_time']
+                answer = question['answer']
+                question_query = "INSERT INTO questions (question_id, product_id, username, text, created_time, answer)\
+                    VALUES (%s, %s, %s, %s, %s, %s);"
+                question_tuple = (question_id, product_id, username, text, created_time, answer)
+                inserting_data(connection, cursor, question_query, question_tuple)
+            cur_offset += parameters['limit']
+        else:
+            print('products questions request >> status_code is not equal 200')
+            break
+    
+
+def get_items_product_data(articles: list[str], proxies: list[str], user_agents: list[str], pg_connection, pg_cursor) -> None:
+    for i in range(len(articles)):
+        time.sleep(1.0 + random.random())
+        item_link = f'{API_LINK}get?sku={articles[i]}'
+        headers = get_random_headers(user_agents)
+        proxy = get_random_proxy(proxies)
+        cur_r = requests.get(item_link, headers=headers, proxies=proxy)
         if cur_r.status_code == 200:
             cur_data = json.loads(cur_r.text)
             print(cur_data['sku'])
@@ -136,7 +201,7 @@ def get_items_data(articles: list[str], proxies: list[str], user_agents: list[st
                     sizes_tuple = (data['product_id'], rus_size, brand_size, stock_quantity)
                     inserting_data(connection, cursor, sizes_query, sizes_tuple)
             
-            def material_data_extract_and_insert(data: dict, item_info: dict, connection, cursor):                   
+            def material_data_extract_and_insert(data: dict, item_info: dict, connection, cursor) -> None:                   
                 '''EXTRACT AND INSERT DATA INTO TABLES materials, material_filling, lining_material and
                 material_filler'''
                 materials_attr = ['material_filling', 'lining_material', 'material_filler']
@@ -161,9 +226,10 @@ def get_items_data(articles: list[str], proxies: list[str], user_agents: list[st
             product_data_insert(product_info, size_fields, pg_connection, pg_cursor)
             size_data_insert(product_info, pg_connection, pg_cursor)
             material_data_extract_and_insert(cur_data, product_info, pg_connection, pg_cursor)
+            get_product_reviews(product_info['product_id'], proxies, user_agents, pg_connection, pg_cursor)
+            get_products_questions(product_info['product_id'], proxies, user_agents, pg_connection, pg_cursor)
         else:
-            print('status_code is not equal 200')
-   
+            print('product request >> status_code is not equal 200')
 
 if __name__ == '__main__':
     with open('proxy.txt', 'r') as f:
@@ -184,7 +250,7 @@ if __name__ == '__main__':
             proxy = get_random_proxy(proxy_list)
             current_page_articles = get_articles(URL, headers, page, proxy=proxy)
             if len(current_page_articles) != 0:
-                get_items_data(current_page_articles, proxy_list, user_agent_list, conn, cursor)
+                get_items_product_data(current_page_articles, proxy_list, user_agent_list, conn, cursor)
                 # break
             else:
                 break

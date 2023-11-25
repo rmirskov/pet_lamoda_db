@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     review_id SERIAL PRIMARY KEY,
     product_id VARCHAR(16),
     uuid VARCHAR(64),
-    text_review VARCHAR(512),
+    text VARCHAR(1024),
     fittings VARCHAR(128),
     created_time TIMESTAMP WITH TIME ZONE,
     rating SMALLINT,
@@ -83,8 +83,8 @@ CREATE TABLE IF NOT EXISTS questions (
     question_id SERIAL PRIMARY KEY,
     product_id VARCHAR(16),
     username VARCHAR(16),
-    text_question VARCHAR(512),
-    answer VARCHAR(512),
+    text VARCHAR(256),
+    answer VARCHAR(1024),
     created_time TIMESTAMP WITH TIME ZONE,
     FOREIGN KEY (product_id) REFERENCES products (product_id)
 );
