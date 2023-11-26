@@ -1,3 +1,3 @@
-Extracting data from the lamoda-online-shop (https://www.lamoda.ru/)\n
-Inserting the extracted data into the database (PostgreSQL)\n
+Extracting data from the lamoda-online-shop (https://www.lamoda.ru/)  
+Inserting the extracted data into the database (PostgreSQL)  
 to be continued...
